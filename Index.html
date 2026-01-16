@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D Live & Chat</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f0f2f5; margin: 0; padding-bottom: 80px; }
+        .header { background-color: #1a237e; color: white; padding: 15px; text-align: center; font-weight: bold; position: sticky; top: 0; z-index: 100; }
+        
+        /* စာတန်းပြေး ဒီဇိုင်း */
+        .marquee-container { background: #0d1546; color: #ffeb3b; padding: 5px 0; font-size: 14px; overflow: hidden; }
+
+        .card { background: white; margin: 10px; padding: 15px; border-radius: 10px; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .big-number { font-size: 60px; color: #ff9800; font-weight: bold; margin: 10px 0; }
+        .data-row { display: flex; justify-content: space-between; background-color: #eee; padding: 10px; border-radius: 5px; }
+        .status-text { font-size: 12px; margin-top: 5px; font-weight: bold; }
+        
+        .history-card { background-color: #1a237e; color: white; margin: 10px; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+        .history-header { display: flex; background-color: #0d1546; padding: 10px; font-size: 14px; font-weight: bold; justify-content: space-between; border-bottom: 1px solid #333; }
+        .history-row { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 13px; }
+        .col { width: 25%; text-align: center; } 
+        .col-time { text-align: left; color: #ddd; font-size: 12px;}
+        .col-num { font-weight: bold; font-size: 16px; color: #ffeb3b; }
+        .digit-main { color: #ffeb3b; font-weight: bold; font-size: 15px; }
+
+        .chat-container { margin: 10px; }
+        .chat-title { font-weight: bold; margin-bottom: 10px; color: #1a237e; }
+        .messages-list { height: 250px; overflow-y: scroll; border: 1px solid #ddd; background: white; padding: 10px; border-radius: 5px; }
+        .msg { margin-bottom: 8px; padding: 8px; background-color: #e3f2fd; border-radius: 10px; font-size: 14px; }
+        .input-area { position: fixed; bottom: 0; left: 0; right: 0; background: white; padding: 10px; display: flex; border-top: 1px solid #ccc; }
+        input { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 20px; outline: none; }
+        button { background-color: #1a237e; color: white; border: none; padding: 10px 20px; margin-left: 5px; border-radius: 20px; }
+    </style>
+</head>
+<body>
+
+    <div class="header">2D Live Myanmar</div>
+
+    <div class="marquee-container">
+        <marquee id="marqueeDisplay" scrollamount="5">ကြိုဆိုပါတယ်ခင်ဗျာ...</marquee>
+    </div>
+
+    <div class="card">
+        <div id="live2D" class="big-number">--</div>
+        <div class="data-row">
+            <span>SET: <b id="setIndex">0.00</b></span>
+            <span>VAL: <b id="setValue">0.00</b></span>
+        </div>
+        <div id="connectionStatus" class="status-text" style="color: orange;">Checking...</div>
+        <small style="color:gray" id="updateTime">Last Updated: --</small>
+    </div>
+
+    <div class="history-card">
+        <div class="history-header">
+            <div class="col col-time">Time</div>
+            <div class="col">Set</div>
+            <div class="col">Value</div>
+            <div class="col">2D</div>
+        </div>
+        <div class="history-row" id="row_1201"></div>
+        <div class="history-row" id="row_0430"></div>
+    </div>
+
+    <div class="chat-container">
+        <div class="chat-title">Live Chat</div>
+        <div class="messages-list" id="msgList"></div>
+    </div>
+
+    <div class="input-area">
+        <input type="text" id="msgInput" placeholder="တစ်ခုခု ပြောပါ...">
+        <button onclick="sendMessage()">Send</button>
+    </div>
+
+    <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyC5_RUoVqzbVZC0QaKnoSktz1zk6g3X2qE",
+      authDomain: "my2d-fae4b.firebaseapp.com",
+      databaseURL: "https://my2d-fae4b-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "my2d-fae4b",
+      storageBucket: "my2d-fae4b.firebasestorage.app",
+      messagingSenderId: "709222169912",
+      appId: "1:709222169912:web:b7330572b09c48c53515cd",
+      measurementId: "G-E01NZ0N08M"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // 1. စာတန်းပြေးကို Firebase ကနေ ဖတ်မယ်
+    db.ref("marquee").on("value", (snapshot) => {
+        const text = snapshot.val();
+        if (text) {
+            document.getElementById('marqueeDisplay').innerText = text;
+        }
+    });
+
+    // 2. LIVE DATA
+    db.ref("live_data").on("value", (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            document.getElementById('live2D').innerText = data.twod;
+            document.getElementById('setIndex').innerText = data.set;
+            document.getElementById('setValue').innerText = data.val;
+            document.getElementById('updateTime').innerText = "Last Updated: " + data.time;
+            document.getElementById('live2D').style.color = "#ff9800"; 
+        }
+    });
+
+    // 3. HISTORY DATA
+    db.ref("history").on("value", (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            if(data['1201']) fillRow("row_1201", "12:01 PM", data['1201']);
+            else resetRow("row_1201", "12:01 PM");
+            if(data['0430']) fillRow("row_0430", "04:30 PM", data['0430']);
+            else resetRow("row_0430", "04:30 PM");
+        }
+    });
+
+    function fillRow(elementId, time, data) {
+        const row = document.getElementById(elementId);
+        if (!row) return;
+        const setLast = data.set.slice(-1);
+        const setPrefix = data.set.slice(0, -1);
+        const valParts = data.val.split('.'); 
+        const valMain = valParts[0];
+        const valLast = valMain.slice(-1);
+        row.innerHTML = `<div class="col col-time">${time}</div>
+            <div class="col">${setPrefix}<span class="digit-main">${setLast}</span></div>
+            <div class="col">${valMain.slice(0,-1)}<span class="digit-main">${valLast}</span>.${valParts[1]||'00'}</div>
+            <div class="col col-num">${data.twod}</div>`;
+    }
+
+    function resetRow(elementId, time) {
+        document.getElementById(elementId).innerHTML = `<div class="col col-time">${time}</div><div class="col">--</div><div class="col">--</div><div class="col col-num">--</div>`;
+    }
+
+    // 4. Connection Status
+    db.ref(".info/connected").on("value", function(snap) {
+        var status = document.getElementById('connectionStatus');
+        if (snap.val() === true) {
+            status.innerHTML = "🟢 System Online"; status.style.color = "green";
+        } else {
+            status.innerHTML = "🔴 Connection Lost"; status.style.color = "red";
+        }
+    });
+
+    // 5. Chat System
+    function sendMessage() {
+        var input = document.getElementById("msgInput");
+        if (input.value.trim() !== "") {
+            db.ref("chats").push({ name: "User", text: input.value, time: Date.now() });
+            input.value = "";
+        }
+    }
+    db.ref("chats").limitToLast(15).on("child_added", function(snapshot) {
+        var data = snapshot.val();
+        var msgList = document.getElementById("msgList");
+        msgList.innerHTML += `<div class='msg'><strong>${data.name}:</strong> ${data.text}</div>`;
+        msgList.scrollTop = msgList.scrollHeight;
+    });
+    </script>
+</body>
+</html>
